@@ -15,6 +15,8 @@ if (cluster.isMaster) {
 
   let invoiceIndex = 0
 
+  const maxInvoice = 10
+
   // asking for an invoice
   const getInvoice = (id) => {
     console.time(`getInvoice-${id}`)
@@ -35,7 +37,11 @@ if (cluster.isMaster) {
     throw new Error(`Receiving something I don\'t ask!!!! ${type}`)
   })
 
-  setInterval(() => {
-    getInvoice(`INV-${process.pid}-${invoiceIndex++}`)
+  let interval = setInterval(() => {
+    if (invoiceIndex >= maxInvoice) {
+      clearInterval(interval)
+    } else {
+      getInvoice(`INV-${process.pid}-${invoiceIndex++}`)
+    }
   }, 500)
 }

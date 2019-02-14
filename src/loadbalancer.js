@@ -121,8 +121,10 @@ sock.on('message', (identity, type, topic, payload) => {
   if (!topic || topic.length === 0) {
     console.log('RESPOND TO CLIENT')
 
-    tasks = tasks.filter(task => task.topic !== type.toString()) // TODO: optimize
     clients.forEach(type, id => clients.send(sock, [id, '', payload]))
+
+    tasks = tasks.filter(task => task.topic !== type.toString()) // TODO: optimize
+    console.log(`There is ${tasks.length} tasks in the cluster...`)
 
     return
   }
