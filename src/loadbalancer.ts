@@ -105,6 +105,7 @@ const addTask = (workerTopic: string, responseTopic: string, payload: string | B
   return task
 }
 
+// TODO: removing a task should cleanup topics and clients
 const removeTask = (task: Task) => {
   tasks.delete(task)
 
