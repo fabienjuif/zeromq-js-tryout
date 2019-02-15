@@ -15,7 +15,7 @@ This is a raw tryout, there is a lot of bugs, I don't know if this is performant
 ## Test it
  - `yarn`
  - In 3 (or more different shells):
-  - `node src/loadbalancer` this is the load balancer
+  - `yarn start` this is the load balancer
   - `node src/invoice [timeout]` this is a worker, `timeout` is the faked processing time for a message
   - `node src/client [workers]` this is client**s**, `workers` is the number of worker you want to spawn, default is 1
 
