@@ -4,7 +4,8 @@ interface ZMQSocket {
   send: (message: Array<string|Buffer>) => {}
 }
 
-const MAX_RETRY = 3
+const TASK_MAX_RETRY = (+process.env.TASK_MAX_RETRY || 3)
+const TASK_TIMEOUT = +(process.env.TASK_TIMEOUT || 1000 * 60 * 1) /* 1H */
 
 interface Client {
   name: string,
@@ -106,6 +107,8 @@ const addTask = (workerTopic: string, responseTopic: string, payload: string | B
 
 const removeTask = (task: Task) => {
   tasks.delete(task)
+
+  printDebug()
 }
 
 /**
@@ -203,7 +206,7 @@ const getNextWorker = (topicName: string): Client => {
 const sendTask = (sock: ZMQSocket, task: Task): boolean => {
   task.date = Date.now()
   task.retry += 1
-  if (task.retry >= MAX_RETRY) {
+  if (task.retry >= TASK_MAX_RETRY) {
     removeTask(task)
     return false
   }
@@ -211,6 +214,7 @@ const sendTask = (sock: ZMQSocket, task: Task): boolean => {
   // select a worker
   const worker = getNextWorker(task.workerTopic)
   if (!worker) return false
+  task.workerName = worker.name
 
   // send the task to the worker
   // if it doesn't works (worker is dead for instance), then we retry
@@ -225,6 +229,7 @@ const sock = zmq.socket('router')
 sock.bindSync('tcp://127.0.0.1:3000')
 sock.setsockopt(zmq.ZMQ_ROUTER_MANDATORY, 1)
 console.log('Load balancer listening to tcp://127.0.0.1:3000')
+console.log(`\t task timeout is ${TASK_TIMEOUT}ms`)
 
 sock.on('message', (name: Buffer, type: Buffer, topic: Buffer, payload: Buffer) => {
   if (!type || type.length === 0) throw new Error('Message type should be set!')
@@ -261,8 +266,7 @@ sock.on('message', (name: Buffer, type: Buffer, topic: Buffer, payload: Buffer) 
   printDebug()
 })
 
-// handle orphans tasks
-// TODO: handle timeout tasks
+// handle orphans tasks and timeout
 const RETRY_TIMEOUT = 100
 let retrying = false
 const retryInterval = setInterval(() => {
@@ -271,12 +275,23 @@ const retryInterval = setInterval(() => {
   if (retrying) return
   retrying = true
 
+  // We ask for "now" only once
+  // - it will be used to handle timeout
+  // - I don't know if we have performance gain
+  const now = Date.now()
+
   tasks.forEach((task) => {
-    // looking for orphans tasks and resend them
-    // - orphans tasks are tasks without a worker (worker was dead during processing)
-    // - a task without a workerName set is not even started
+    // task is not even started
     if (task.workerName === undefined || task.retry === -1) return
+
+    // orphans tasks
+    // - orphans tasks are tasks without a worker (worker was dead during processing)
     if (!clients.get(task.workerName)) sendTask(sock, task)
+
+    // timeout tasks
+    // - timeout tasks are tasks that are sent to a worker that is still alive
+    // - but the worker didn't send the response before a TASK_TIMEOUT
+    if (task.date + TASK_TIMEOUT < now) sendTask(sock, task)
   })
 
   retrying = false
